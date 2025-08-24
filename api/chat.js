@@ -22,7 +22,6 @@ module.exports = async (req, res) => {
 
     const messages = Array.isArray(body?.messages) ? body.messages : [];
     const lang = (body?.lang || "de").toLowerCase();
-
     if (messages.length === 0) {
       return res.status(400).json({ error: "messages must be an array and not empty" });
     }
@@ -36,8 +35,14 @@ module.exports = async (req, res) => {
     }[lang] || "Antworte streng auf DEUTSCH.";
 
     // --- system prompt: no greetings, no lists, <=3 sentences ---
-    const systemContent =
-      Ти — маркетолог із 8-річним досвідом. Відповідай коротко (максимум 3 речення), конкретно, у професійному та дружньому тоні, лише з пропозиціями щодо роботи, без загальної інформації чи привітань. Для Web: запропонуй тип сайту (лендинг, магазин, корпоративний) і аналогічний сайт із чатом, як у нас; для Google Ads: вкажи тип кампанії (пошукова, КМС, ремаркетинг, YouTube) + 1–2 гіпотези + ключову метрику; для SMM: опиши ідею контент-плану + воронку продажів; для SEO: вкажи 2–3 пріоритети оптимізації; для кожного вкажи орієнтовний термін виконання. За запитом про ціни: створення сайту від 50€ (7 днів), запуск SMM від 50€ (5 днів), запуск Google Ads від 50€ (3 дні), SEO від 50€ (14 днів). Якщо запит не стосується Web, Google Ads, SMM чи SEO, запропонуй зв’язатися через Telegram (@Marketing_in_Deutschland). Відповідай мовою запиту: українською, російською, німецькою або англійською.
+    const systemContent = (
+      "Ти — маркетолог із 8-річним досвідом. Без привітань. " +
+      "Відповідай дуже коротко: максимум 3 речення. " +
+      "Без Markdown, без списків, без нумерації, без заголовків — лише звичайний текст. " +
+      "Для Web: запропонуй тип сайту та коротко суть. " +
+      "Для Google Ads: тип кампанії + 1–2 гіпотези + ключову метрику. " +
+      "Для SMM: ідея контент‑плану + воронка. Для SEO: 2–3 пріоритети. "
+    ) + " " + langPhrase;
 
     // --- trim overly long user message ---
     const last = messages[messages.length - 1];
@@ -72,13 +77,11 @@ module.exports = async (req, res) => {
     if (!r.ok) {
       if (data?.error === "timeout") {
         const msg =
-  lang === "uk" ? "Спробуйте ще раз \u2014 сервер відповідав надто довго." :
-  lang === "ru" ? "Попробуйте еще раз \u2014 сервер отвечал слишком долго." :
-  lang === "de" ? "Versuchen Sie es erneut \u2014 der Server hat zu lange geantwortet." :
-                  "Try again \u2014 the server took too long to respond.";
-return res.status(200).json({ reply: msg });
-
-
+          (lang === "uk") ? "Спробуйте ще раз — сервер відповідав надто довго." :
+          (lang === "ru") ? "Попробуйте еще раз — сервер отвечал слишком долго." :
+          (lang === "de") ? "Versuchen Sie es erneut — der Server hat zu lange geantwortet." :
+                            "Try again — the server took too long to respond.";
+        return res.status(200).json({ reply: msg });
       }
       return res.status(500).json({ error: "openai_error", detail: data });
     }
@@ -87,7 +90,7 @@ return res.status(200).json({ reply: msg });
     function sanitize(txt) {
       if (!txt) return "";
       return txt
-        .replace(/[#*_`>]+/g, " ")                 // markdown chars
+        .replace(/[#*_`>]+/g, " ")                         // markdown chars
         .replace(/^\s*([\-\*•]|\d+[\.\)]|\(\d+\))\s*/gm, "") // bullets & numbering at line start
         .replace(/\s{2,}/g, " ")
         .replace(/\n+/g, " ")
