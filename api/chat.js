@@ -72,11 +72,12 @@ module.exports = async (req, res) => {
     if (!r.ok) {
       if (data?.error === "timeout") {
         const msg =
-  lang === "uk" ? "Спробуйте ще раз - сервер відповідав надто довго." :
-  lang === "ru" ? "Попробуйте еще раз - сервер отвечал слишком долго." :
-  lang === "de" ? "Versuchen Sie es erneut - der Server hat zu lange geantwortet." :
-                  "Try again - the server took too long to respond.";
+  lang === "uk" ? "Спробуйте ще раз \u2014 сервер відповідав надто довго." :
+  lang === "ru" ? "Попробуйте еще раз \u2014 сервер отвечал слишком долго." :
+  lang === "de" ? "Versuchen Sie es erneut \u2014 der Server hat zu lange geantwortet." :
+                  "Try again \u2014 the server took too long to respond.";
 return res.status(200).json({ reply: msg });
+
 
       }
       return res.status(500).json({ error: "openai_error", detail: data });
