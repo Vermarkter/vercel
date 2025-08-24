@@ -71,8 +71,8 @@ ${langPhrase}
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        temperature: 0.4,
-        max_tokens: 220,
+        temperature: 0.2,
+        max_tokens: 200,
         messages: [{ role: "system", content: systemContent }, ...messages]
       }),
       signal: controller.signal
