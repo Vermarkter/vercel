@@ -1,9 +1,20 @@
 // api/chat.js
 export default async function handler(req, res) {
-  // CORS тільки для твого фронтенду:
-  const ORIGIN = 'https://vermarkter.github.io';
-  res.setHeader('Access-Control-Allow-Origin', ORIGIN);
-  res.setHeader('Vary', 'Origin');
+  // --- CORS: дозволяємо кілька джерел (GitHub Pages, Vercel, локалка) ---
+  const allowlist = [
+    'https://vermarkter.github.io',
+    'https://vercel-sable-ten.vercel.app',
+    'http://localhost:5500',
+    'http://localhost:3000'
+  ];
+  const origin = req.headers.origin;
+  if (allowlist.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  } else {
+    // за замовчуванням можна і "*" (або нічого, якщо хочеш суворіше)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
@@ -15,7 +26,7 @@ export default async function handler(req, res) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return res.status(500).json({ error: 'OPENAI_API_KEY missing' });
 
-    // Body (fallback для сирого)
+    // --- Body (fallback для сирого) ---
     let body = req.body;
     if (!body || typeof body !== 'object') {
       const raw = await new Promise((resolve) => {
@@ -35,34 +46,33 @@ export default async function handler(req, res) {
       ru: 'Отвечай строго на РУССКОМ.'
     }[lang] || 'Antworte streng auf DEUTSCH.';
 
-    // Промпт: спочатку уточнюючі питання, далі короткий план; терміни і терміни під мову
+    // --- ОДИН systemContent (без дубля) ---
     const systemContent = `
-const systemContent = `
 Ти — маркетолог із 8-річним досвідом у Web, Google Ads, SMM та SEO.
 ${langPhrase}
 
-Головне правило: максимум 3 короткі речення; без списків/заголовків; або конкретні уточнювальні запитання, або конкретний план з діями і метриками.
+Головне правило: максимум 3 короткі речення; без списків/заголовків; або став 2–3 уточнюючі запитання, або давай конкретний план з діями та метрикою.
 
-Перевір, чи користувач надав усі дані:
-1) ніша/бізнес (що саме продає або пропонує),
-2) географія/регіон,
-3) ціль (ліди, продажі, впізнаваність, повторні клієнти),
-4) бюджет (хоча б орієнтовно),
+Перевір, чи користувач надав:
+1) нішу/бізнес,
+2) географію,
+3) ціль (ліди/продажі/впізнаваність/повторні),
+4) бюджет,
 5) канал (Google Ads / SMM / SEO / сайт).
 
-Якщо бракує хоча б одного пункту — НЕ давай план. Натомість постав 2–3 дуже короткі уточнення (напр.: "який бюджет?", "яка ціль?", "де шукати клієнтів?", "який канал обираєте?"). 
-Коли всі 5 пунктів зрозумілі — дай стислий план до 3 речень з конкретними діями і однією ключовою метрикою (CPA або ROAS).
+Якщо чогось бракує — НЕ давай план, а постав 2–3 короткі уточнення (напр.: "який бюджет?", "яка ціль?", "яке місто?", "який канал?").
+Коли все зрозуміло — дай план до 3 речень з конкретними діями і однією ключовою метрикою (CPA або ROAS).
 
-Якщо запит загальний ("потрібна реклама" / "нужна реклама" / "I need ads" / "Ich brauche Werbung") — вважай це Google Ads і постав 2–3 уточнювальні запитання (ніша, бюджет, регіон/місто, тип реклами: Пошук/КМС/Ремаркетинг/YouTube).
+Якщо запит загальний ("потрібна реклама" / "нужна реклама" / "I need ads" / "Ich brauche Werbung") — вважай це Google Ads і постав 2–3 уточнення (ніша, бюджет, регіон/місто, тип: Пошук/КМС/Remarketing/YouTube).
 
-Глосарій (використовуй терміни мовою відповіді):
-- uk: Пошук, КМС (медійна мережа), Ремаркетинг, YouTube, CPA, ROAS.
-- ru: Поиск, КМС (контекстно-медийная сеть), Ремаркетинг, YouTube, CPA, ROAS.
+Глосарій (відповідай термінами мовою користувача):
+- uk: Пошук, КМС, Ремаркетинг, YouTube, CPA, ROAS.
+- ru: Поиск, КМС, Ремаркетинг, YouTube, CPA, ROAS.
 - de: Suche, Display, Remarketing, YouTube, CPA, ROAS.
 - en: Search, Display, Remarketing, YouTube, CPA, ROAS.
 `.trim();
 
-    // Обрізати надто довге останнє повідомлення
+    // Обрізка довгого останнього повідомлення
     const last = messages[messages.length - 1];
     if (last && typeof last.content === 'string' && last.content.length > 1200) {
       last.content = last.content.slice(0, 1200) + ' …';
@@ -101,7 +111,7 @@ ${langPhrase}
       return res.status(500).json({ error: 'openai_error', detail: data });
     }
 
-    // Санітизація: без маркдауна/списків, до 3 речень
+    // Санітизація
     function sanitize(txt) {
       if (!txt) return '';
       return txt
