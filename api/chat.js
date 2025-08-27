@@ -1,20 +1,9 @@
 // api/chat.js
 export default async function handler(req, res) {
-  // --- CORS: дозволяємо кілька джерел (GitHub Pages, Vercel, локалка) ---
-  const allowlist = [
-    'https://vermarkter.github.io',
-    'https://vercel-sable-ten.vercel.app',
-    'http://localhost:5500',
-    'http://localhost:3000'
-  ];
-  const origin = req.headers.origin;
-  if (allowlist.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  } else {
-    // за замовчуванням можна і "*" (або нічого, якщо хочеш суворіше)
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
+  // --- CORS: відповідаємо тим самим Origin або '*' ---
+  const origin = req.headers.origin || '*';
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
