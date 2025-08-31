@@ -31,9 +31,9 @@ export default async function handler(req, res) {
       try { body = raw ? JSON.parse(raw) : {}; } catch { body = {}; }
     }
 
-    // Обмежуємо історію до останніх 6 повідомлень
+    // Обмежуємо історію до останніх 5 повідомлень
     const messages = Array.isArray(body.messages)
-      ? body.messages.slice(-6)
+      ? body.messages.slice(-5)
       : [];
     
     if (messages.length === 0) return res.status(400).json({ error: 'messages must be an array and not empty' });
@@ -92,7 +92,7 @@ ${langPhrase}
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         temperature: 0.2,
-        max_tokens: 180,
+        max_tokens: 200,
         messages: [{ role: 'system', content: systemContent }, ...messages]
       }),
       signal: controller.signal
