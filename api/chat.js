@@ -1,6 +1,5 @@
 // api/chat.js
 export default async function handler(req, res) {
-  // --- CORS: дозволяємо кілька джерел (GitHub Pages, Vercel, локалка) ---
   const allowlist = [
     'https://vermarkter.github.io',
     'https://vercel-sable-ten.vercel.app',
@@ -12,13 +11,11 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
   } else {
-    // за замовчуванням можна і "*" (або нічого, якщо хочеш суворіше)
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  // Preflight
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -26,7 +23,6 @@ export default async function handler(req, res) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return res.status(500).json({ error: 'OPENAI_API_KEY missing' });
 
-    // --- Body (fallback для сирого) ---
     let body = req.body;
     if (!body || typeof body !== 'object') {
       const raw = await new Promise((resolve) => {
@@ -35,18 +31,25 @@ export default async function handler(req, res) {
       try { body = raw ? JSON.parse(raw) : {}; } catch { body = {}; }
     }
 
-    const messages = Array.isArray(body?.messages) ? body.messages : [];
-    const lang = (body?.lang || 'de').toLowerCase();
+    // Обмежуємо історію до останніх 6 повідомлень
+    const messages = Array.isArray(body.messages)
+      ? body.messages.slice(-6)
+      : [];
+    
     if (messages.length === 0) return res.status(400).json({ error: 'messages must be an array and not empty' });
+
+    const validLangs = ['uk', 'ru', 'de', 'en'];
+    const lang = validLangs.includes(body.lang?.toLowerCase())
+      ? body.lang.toLowerCase()
+      : 'de';
 
     const langPhrase = {
       de: 'Antworte streng auf DEUTSCH.',
       en: 'Answer strictly in ENGLISH.',
       uk: 'Відповідай строго УКРАЇНСЬКОЮ.',
       ru: 'Отвечай строго на РУССКОМ.'
-    }[lang] || 'Antworte streng auf DEUTSCH.';
+    }[lang];
 
-    // --- ОДИН systemContent (без дубля) ---
     const systemContent = `
 Ти — маркетолог із 8-річним досвідом у Web, Google Ads, SMM та SEO.
 ${langPhrase}
@@ -72,19 +75,20 @@ ${langPhrase}
 - en: Search, Display, Remarketing, YouTube, CPA, ROAS.
 `.trim();
 
-    // Обрізка довгого останнього повідомлення
     const last = messages[messages.length - 1];
     if (last && typeof last.content === 'string' && last.content.length > 1200) {
       last.content = last.content.slice(0, 1200) + ' …';
     }
 
-    // Таймаут
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
 
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         temperature: 0.2,
@@ -98,23 +102,25 @@ ${langPhrase}
     });
     clearTimeout(timeout);
 
-    const data = await r.json();
-    if (!r.ok) {
-      if (data?.error === 'timeout') {
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      if (data.error === 'timeout') {
         const msg =
           lang === 'uk' ? 'Спробуйте ще раз — сервер відповідав надто довго.' :
           lang === 'ru' ? 'Попробуйте еще раз — сервер отвечал слишком долго.' :
           lang === 'de' ? 'Versuchen Sie es erneut — der Server hat zu lange geantwortet.' :
-                          'Try again — the server took too long to respond.';
+                         'Try again — the server took too long to respond.';
         return res.status(200).json({ reply: msg });
       }
       return res.status(500).json({ error: 'openai_error', detail: data });
     }
 
-    // Санітизація
-    function sanitize(txt) {
-      if (!txt) return '';
-      return txt
+    const data = await response.json();
+    const replyRaw = data?.choices?.[0]?.message?.content || '';
+    
+    function sanitize(text) {
+      if (!text) return '';
+      return text
         .replace(/[#*_`>]+/g, ' ')
         .replace(/^\s*([\-\*•]|\d+[\.\)]|\(\d+\))\s*/gm, '')
         .replace(/\s{2,}/g, ' ')
@@ -126,17 +132,16 @@ ${langPhrase}
         .trim();
     }
 
-    const replyRaw = data?.choices?.[0]?.message?.content || '';
     const reply = sanitize(replyRaw) || (
       lang === 'uk' ? 'Опишіть, будь ласка, задачу: Web / Google Ads / SMM / SEO.' :
       lang === 'ru' ? 'Опишите, пожалуйста, задачу: Web / Google Ads / SMM / SEO.' :
       lang === 'de' ? 'Beschreiben Sie bitte kurz die Aufgabe: Web / Google Ads / SMM / SEO.' :
-                      'Please describe your task: Web / Google Ads / SMM / SEO.'
+                     'Please describe your task: Web / Google Ads / SMM / SEO.'
     );
 
-    return res.status(200).json({ reply });
+    res.status(200).json({ reply });
   } catch (e) {
     console.error('Server error:', e);
-    return res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error' });
   }
 }
